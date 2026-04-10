@@ -175,9 +175,11 @@ export function applyFsrsChoice(
   choice: { interval: number; stability: number; difficulty: number },
 ): void {
   let updated: Card | undefined;
+  let prevLastReview: number | null = null;
   cards.update(all =>
     all.map(c => {
       if (c.id !== id) return c;
+      prevLastReview = c.lastReview;
       const now = Date.now();
       const isLapse = rating === 'again';
       updated = {
@@ -195,7 +197,24 @@ export function applyFsrsChoice(
       return updated;
     }),
   );
-  if (updated) persist(invoke('db_save_card', { card: updated }));
+  if (updated) {
+    persist(invoke('db_save_card', { card: updated }));
+    const elapsed = prevLastReview != null
+      ? Math.max(0, Math.floor((Date.now() - prevLastReview) / 86_400_000))
+      : 0;
+    persist(invoke('db_log_review', {
+      log: {
+        cardId: id,
+        deckId: updated.deckId,
+        rating,
+        elapsedDays: elapsed,
+        newStability: choice.stability,
+        newDifficulty: choice.difficulty,
+        newInterval: choice.interval,
+        reviewedAt: Date.now(),
+      }
+    }));
+  }
 }
 
 export function addNote(
