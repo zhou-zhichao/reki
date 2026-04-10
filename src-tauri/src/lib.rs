@@ -137,6 +137,8 @@ pub fn run() {
             db::db_load_all,
             db::db_save_deck,
             db::db_delete_deck,
+            db::db_save_note,
+            db::db_delete_note,
             db::db_save_card,
             db::db_delete_card,
             db::db_save_cards_bulk,
