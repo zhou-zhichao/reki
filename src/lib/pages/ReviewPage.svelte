@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { dueCards, activeDeck, activeDeckId, applyFsrsChoice, cards } from '../stores/data';
+  import { dueCards, activeDeck, activeDeckId, applyFsrsChoice, cards, notes } from '../stores/data';
   import { route } from '../stores/router';
   import { shortcuts, formatKey, type RatingKey } from '../stores/shortcuts';
   import { fsrsNextStates, desiredRetention, type NextStates } from '../stores/srs';
@@ -12,6 +12,10 @@
   let scheduleError = $state<string | null>(null);
 
   const currentCard = $derived($dueCards[currentIndex] ?? null);
+  const currentNote = $derived(
+    currentCard ? $notes.find(n => n.id === currentCard.noteId) ?? null : null
+  );
+  const isCloze = $derived(currentNote?.noteType === 'cloze');
   const totalDue = $derived($dueCards.length);
   const newCount = $derived($dueCards.filter(c => c.state === 'new').length);
 
@@ -128,11 +132,20 @@
     <div class="card-area">
       {#if currentCard}
         <div class="card-content">
-          <div class="card-front"><Markdown src={currentCard.front} /></div>
-
-          {#if showAnswer}
-            <div class="card-divider"></div>
-            <div class="card-back"><Markdown src={currentCard.back} /></div>
+          {#if isCloze && currentNote}
+            <div class="card-front">
+              <Markdown src={currentNote.front} clozeOrdinal={currentCard.ordinal} clozeRevealed={showAnswer} />
+            </div>
+            {#if showAnswer && currentNote.back}
+              <div class="card-divider"></div>
+              <div class="card-back"><Markdown src={currentNote.back} /></div>
+            {/if}
+          {:else}
+            <div class="card-front"><Markdown src={currentCard.front} /></div>
+            {#if showAnswer}
+              <div class="card-divider"></div>
+              <div class="card-back"><Markdown src={currentCard.back} /></div>
+            {/if}
           {/if}
         </div>
 
