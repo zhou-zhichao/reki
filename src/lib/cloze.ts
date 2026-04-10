@@ -14,7 +14,6 @@ export interface Cloze {
 }
 
 const CLOZE_PATTERN = /\{\{c(\d+)::([^}]*?)(?:::([^}]*?))?\}\}/;
-const CLOZE_RE_G = new RegExp(CLOZE_PATTERN.source, 'g');
 
 export function parseClozes(text: string): Cloze[] {
   const results: Cloze[] = [];

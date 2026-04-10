@@ -147,33 +147,8 @@ export function addCard(
   back: string,
   tags: string[] = [],
 ): Card {
-  const t = Date.now();
-  const noteId = uid();
-  const card: Card = {
-    id: uid(),
-    deckId,
-    noteId,
-    ordinal: 0,
-    front,
-    back,
-    stability: null,
-    difficulty: null,
-    lastReview: null,
-    interval: 0,
-    ease: 2.5,
-    due: t,
-    reps: 0,
-    lapses: 0,
-    state: 'new',
-    tags,
-    createdAt: t,
-    editedAt: t,
-    flag: 0,
-    position: 0,
-  };
-  cards.update(c => [...c, card]);
-  persist(invoke('db_save_card', { card }));
-  return card;
+  const { newCards } = addNote(deckId, 'basic', front, back, tags);
+  return newCards[0];
 }
 
 export function updateCard(id: string, updates: Partial<Card>): void {
@@ -292,8 +267,9 @@ export function updateNote(
 
     // Update kept cards' content snapshot
     const kept = newOrdinals.filter(o => currentOrdinals.includes(o));
+    const snapshot = get(cards);
     for (const ord of kept) {
-      const cardToUpdate = get(cards).find(c => c.noteId === noteId && c.ordinal === ord);
+      const cardToUpdate = snapshot.find(c => c.noteId === noteId && c.ordinal === ord);
       if (cardToUpdate) {
         updateCard(cardToUpdate.id, { front: updatedNote.front, back: updatedNote.back, tags: updatedNote.tags });
       }
