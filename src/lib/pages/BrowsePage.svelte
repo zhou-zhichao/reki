@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { cards, decks, activeDeckId, updateCard, deleteCard, notes, type Card } from '../stores/data';
+  import { cards, decks, activeDeckId, updateCard, deleteCard, notes, updateNote, deleteNote, type Card, type Note } from '../stores/data';
   import { parseQuery } from '../query';
   import MarkdownEditor from '../components/MarkdownEditor.svelte';
   import { stripMarkdown } from '../markdown';
@@ -18,6 +18,10 @@
 
   const selectedCard = $derived(filtered.find(c => c.id === selectedId) ?? null);
 
+  const selectedNote = $derived(
+    selectedCard ? $notes.find(n => n.id === selectedCard.noteId) ?? null : null
+  );
+
   function selectCard(card: Card) {
     selectedId = card.id;
     editFront = card.front;
@@ -25,13 +29,13 @@
   }
 
   function saveEdit() {
-    if (!selectedId) return;
-    updateCard(selectedId, { front: editFront, back: editBack });
+    if (!selectedId || !selectedNote) return;
+    updateNote(selectedNote.id, { front: editFront, back: editBack });
   }
 
   function removeCard() {
-    if (!selectedId) return;
-    deleteCard(selectedId);
+    if (!selectedId || !selectedNote) return;
+    deleteNote(selectedNote.id);
     selectedId = null;
   }
 
@@ -166,6 +170,7 @@
         <thead>
           <tr>
             <th class="col-flag"></th>
+            <th class="col-type">Type</th>
             <th class="col-front">Front</th>
             <th class="col-deck">Deck</th>
             <th class="col-state">State</th>
@@ -184,6 +189,11 @@
                   <span class="flag-dot" style="background: {FLAG_COLORS[card.flag]}" title={FLAG_NAMES[card.flag]}></span>
                 {/if}
               </td>
+              <td class="col-type">
+                <span class="type-badge" class:cloze={$notes.find(n => n.id === card.noteId)?.noteType === 'cloze'}>
+                  {$notes.find(n => n.id === card.noteId)?.noteType === 'cloze' ? 'Cloze' : 'Basic'}
+                </span>
+              </td>
               <td class="col-front">{stripMarkdown(card.front, 80)}</td>
               <td class="col-deck">{getDeckName(card.deckId)}</td>
               <td class="col-state">
@@ -196,7 +206,7 @@
             </tr>
           {:else}
             <tr>
-              <td colspan="6" class="no-results">No cards found</td>
+              <td colspan="7" class="no-results">No cards found</td>
             </tr>
           {/each}
         </tbody>
@@ -207,7 +217,7 @@
   {#if selectedCard}
     <aside class="detail-panel">
       <div class="detail-header">
-        <h4>Edit Card</h4>
+        <h4>{selectedNote?.noteType === 'cloze' ? 'Edit Cloze Note' : 'Edit Card'}</h4>
         <button class="close-btn" onclick={() => selectedId = null}>×</button>
       </div>
 
@@ -238,6 +248,12 @@
           <span class="meta-label">Ease</span>
           <span>{(selectedCard.ease * 100).toFixed(0)}%</span>
         </div>
+        {#if selectedNote?.noteType === 'cloze'}
+          <div class="meta-row">
+            <span class="meta-label">Cards</span>
+            <span>{$cards.filter(c => c.noteId === selectedNote?.id).length} cloze cards</span>
+          </div>
+        {/if}
         {#if selectedCard.tags.length > 0}
           <div class="meta-row">
             <span class="meta-label">Tags</span>
@@ -681,5 +697,20 @@
 
   .btn-danger:hover {
     background: color-mix(in srgb, var(--c-again) 12%, transparent);
+  }
+
+  .col-type { width: 60px; }
+
+  .type-badge {
+    font-size: var(--text-xs);
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: var(--r-sm);
+    color: var(--text-muted);
+  }
+
+  .type-badge.cloze {
+    color: var(--accent);
+    background: var(--accent-bg);
   }
 </style>
