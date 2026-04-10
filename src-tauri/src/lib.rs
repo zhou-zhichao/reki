@@ -17,19 +17,35 @@ async fn generate_cards(
     app: tauri::AppHandle,
     topic: String,
     count: Option<u32>,
+    cloze: Option<bool>,
 ) -> Result<Vec<GeneratedCard>, String> {
     let n = count.unwrap_or(5);
-    let prompt = format!(
-        "Generate exactly {n} high-quality flashcards for spaced repetition about the following topic.\n\n\
-        Topic: {topic}\n\n\
-        Rules:\n\
-        - Each card has a concise 'front' (question/prompt) and a clear 'back' (answer/explanation).\n\
-        - Front should be atomic — test one concept per card.\n\
-        - Back should be accurate and self-contained.\n\
-        - Output ONLY valid JSON: an array of objects with 'front' and 'back' string fields.\n\
-        - No markdown code fences. No prose. No explanation. Just raw JSON.\n\
-        - Do not include any text before or after the JSON array."
-    );
+    let is_cloze = cloze.unwrap_or(false);
+    let prompt = if is_cloze {
+        format!(
+            "Generate exactly {n} high-quality cloze deletion flashcards about the following topic.\n\n\
+            Topic: {topic}\n\n\
+            Rules:\n\
+            - Use cloze deletion format: {{{{c1::answer}}}} or {{{{c1::answer::hint}}}}.\n\
+            - Use multiple cloze numbers (c1, c2, c3...) for multiple deletions in one sentence.\n\
+            - Put the cloze text in 'front'. Use 'back' for optional extra context.\n\
+            - Output ONLY valid JSON: an array of objects with 'front' and 'back' string fields.\n\
+            - No markdown code fences. No prose. No explanation. Just raw JSON.\n\
+            - Do not include any text before or after the JSON array."
+        )
+    } else {
+        format!(
+            "Generate exactly {n} high-quality flashcards for spaced repetition about the following topic.\n\n\
+            Topic: {topic}\n\n\
+            Rules:\n\
+            - Each card has a concise 'front' (question/prompt) and a clear 'back' (answer/explanation).\n\
+            - Front should be atomic — test one concept per card.\n\
+            - Back should be accurate and self-contained.\n\
+            - Output ONLY valid JSON: an array of objects with 'front' and 'back' string fields.\n\
+            - No markdown code fences. No prose. No explanation. Just raw JSON.\n\
+            - Do not include any text before or after the JSON array."
+        )
+    };
 
     let shell = app.shell();
     let output = shell

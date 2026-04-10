@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { cards, decks, activeDeckId, updateCard, deleteCard, type Card } from '../stores/data';
+  import { cards, decks, activeDeckId, updateCard, deleteCard, notes, type Card } from '../stores/data';
   import { parseQuery } from '../query';
   import MarkdownEditor from '../components/MarkdownEditor.svelte';
   import { stripMarkdown } from '../markdown';
@@ -13,7 +13,7 @@
   const parsed = $derived(parseQuery(search));
 
   const filtered = $derived(
-    parsed.matches($cards, { decks: $decks, now: Date.now(), currentDeckId: $activeDeckId })
+    parsed.matches($cards, { decks: $decks, notes: $notes, now: Date.now(), currentDeckId: $activeDeckId })
   );
 
   const selectedCard = $derived(filtered.find(c => c.id === selectedId) ?? null);

@@ -86,7 +86,17 @@ describe('renderClozeBack', () => {
   });
 });
 
-import { renderMarkdownCloze } from './markdown';
+import { renderMarkdownCloze, stripMarkdown } from './markdown';
+
+describe('stripMarkdown with cloze', () => {
+  it('strips cloze markers showing answer text', () => {
+    expect(stripMarkdown('{{c1::Paris}} is in {{c2::France}}')).toBe('Paris is in France');
+  });
+
+  it('strips cloze with hint showing answer not hint', () => {
+    expect(stripMarkdown('{{c1::Paris::a city}}')).toBe('Paris');
+  });
+});
 
 describe('renderMarkdownCloze', () => {
   it('renders cloze front with markdown', async () => {

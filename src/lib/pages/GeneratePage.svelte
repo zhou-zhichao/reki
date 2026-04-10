@@ -9,6 +9,7 @@
   let generating = $state(false);
   let generatedCards = $state<{ front: string; back: string; selected: boolean }[]>([]);
   let errorMsg = $state<string | null>(null);
+  let clozeMode = $state(false);
 
   async function generate() {
     if (!prompt.trim()) return;
@@ -20,6 +21,7 @@
       const result = await invoke<{ front: string; back: string }[]>('generate_cards', {
         topic: prompt,
         count: cardCount,
+        cloze: clozeMode,
       });
       generatedCards = result.map(c => ({ ...c, selected: true }));
     } catch (e) {
@@ -36,7 +38,7 @@
   function addSelected() {
     if (!selectedDeckId) return;
     const toAdd = generatedCards.filter(c => c.selected).map(c => ({ front: c.front, back: c.back }));
-    addCardsBulk(selectedDeckId, toAdd, ['ai-generated']);
+    addCardsBulk(selectedDeckId, toAdd, ['ai-generated'], clozeMode ? 'cloze' : 'basic');
     generatedCards = [];
     prompt = '';
   }
@@ -71,6 +73,18 @@
       <div class="gen-deck-select">
         <label for="gen-count">Count</label>
         <input id="gen-count" type="number" min="1" max="20" bind:value={cardCount} class="count-input" />
+      </div>
+
+      <div class="gen-deck-select">
+        <label for="gen-cloze">Format</label>
+        <button
+          id="gen-cloze"
+          class="cloze-toggle"
+          class:active={clozeMode}
+          onclick={() => clozeMode = !clozeMode}
+        >
+          {clozeMode ? 'Cloze' : 'Basic'}
+        </button>
       </div>
 
       <button
@@ -371,5 +385,26 @@
   .placeholder-note {
     font-size: var(--text-xs);
     color: var(--text-muted);
+  }
+
+  .cloze-toggle {
+    padding: var(--sp-sm) var(--sp-md);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all var(--dur-micro) var(--ease);
+  }
+
+  .cloze-toggle:hover {
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+  }
+
+  .cloze-toggle.active {
+    background: var(--accent-bg);
+    border-color: var(--accent);
+    color: var(--accent);
   }
 </style>

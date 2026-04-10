@@ -260,6 +260,9 @@ export function stripMarkdown(src: string, maxLen = 120): string {
 
   let s = src;
 
+  // Strip cloze markers → answer text
+  s = s.replace(/\{\{c\d+::([^}]*?)(?:::[^}]*?)?\}\}/g, '$1');
+
   // Fenced code blocks  → space
   s = s.replace(/```[\s\S]*?```/g, ' ');
   // Inline code  → content

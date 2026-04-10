@@ -60,10 +60,11 @@
  *   introduced:, has-cd:, preset:, sc:
  */
 
-import type { Card, Deck } from './stores/data';
+import type { Card, Deck, Note } from './stores/data';
 
 export interface QueryContext {
   decks: Deck[];
+  notes: Note[];
   now: number;
   currentDeckId?: string | null;
 }
@@ -348,6 +349,26 @@ function buildFieldPredicate(tok: Token): Predicate {
       if (pattern.endsWith('*'))   { rightBoundary = ''; pattern = pattern.slice(0, -1); }
       const re = new RegExp(leftBoundary + escapeRegex(pattern) + rightBoundary, 'iu');
       return (c) => re.test(c.front) || re.test(c.back);
+    }
+
+    case 'note-type':
+    case 'note_type': {
+      const val = lower;
+      if (val !== 'basic' && val !== 'cloze') return failPred(`note_type must be "basic" or "cloze", got "${value}"`);
+      return (c, ctx) => {
+        const note = ctx.notes.find(n => n.id === c.noteId);
+        return note?.noteType === val;
+      };
+    }
+
+    case 'has': {
+      if (lower === 'cloze') {
+        return (c, ctx) => {
+          const note = ctx.notes.find(n => n.id === c.noteId);
+          return note?.noteType === 'cloze';
+        };
+      }
+      return failPred(`Unknown has: value "${value}"`);
     }
 
     default:
