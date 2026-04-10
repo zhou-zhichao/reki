@@ -5,6 +5,7 @@
   import DecksPage from './lib/pages/DecksPage.svelte';
   import BrowsePage from './lib/pages/BrowsePage.svelte';
   import GeneratePage from './lib/pages/GeneratePage.svelte';
+  import StatsPage from './lib/pages/StatsPage.svelte';
   import SettingsPage from './lib/pages/SettingsPage.svelte';
   import { route } from './lib/stores/router';
   import { loadFromDb, dataLoaded } from './lib/stores/data';
@@ -33,6 +34,8 @@
       <BrowsePage />
     {:else if $route === 'generate'}
       <GeneratePage />
+    {:else if $route === 'stats'}
+      <StatsPage />
     {:else if $route === 'settings'}
       <SettingsPage />
     {/if}
