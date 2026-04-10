@@ -40,6 +40,9 @@ coverage/
 .claude/sessions/
 .claude/cache/
 
+# Git worktrees
+.worktrees/
+
 # Local-only tool scratch (not useful in the repo)
 skills/
 .agents/
