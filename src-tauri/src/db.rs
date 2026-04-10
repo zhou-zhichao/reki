@@ -68,6 +68,39 @@ pub struct Note {
     pub edited_at: i64,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewLog {
+    pub card_id: String,
+    pub deck_id: String,
+    pub rating: String,
+    pub elapsed_days: i64,
+    pub new_stability: Option<f32>,
+    pub new_difficulty: Option<f32>,
+    pub new_interval: i64,
+    pub reviewed_at: i64,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewStats {
+    pub daily_counts: Vec<DayCount>,
+    pub today_count: i64,
+    pub today_again: i64,
+    pub today_correct: i64,
+}
+
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DayCount {
+    pub date: String,
+    pub total: i64,
+    pub again: i64,
+    pub hard: i64,
+    pub good: i64,
+    pub easy: i64,
+}
+
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
@@ -211,6 +244,29 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         }
 
         set_version(conn, 2)?;
+    }
+
+    if v < 3 {
+        conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS review_log (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                card_id         TEXT NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+                deck_id         TEXT NOT NULL,
+                rating          TEXT NOT NULL,
+                elapsed_days    INTEGER NOT NULL,
+                new_stability   REAL,
+                new_difficulty  REAL,
+                new_interval    INTEGER NOT NULL,
+                reviewed_at     INTEGER NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS review_log_card_id ON review_log(card_id);
+            CREATE INDEX IF NOT EXISTS review_log_reviewed_at ON review_log(reviewed_at);
+            CREATE INDEX IF NOT EXISTS review_log_deck_id ON review_log(deck_id);
+            "#,
+        )?;
+        set_version(conn, 3)?;
     }
 
     Ok(())
@@ -376,6 +432,134 @@ pub fn count_decks(conn: &Connection) -> rusqlite::Result<i64> {
     conn.query_row("SELECT COUNT(*) FROM decks", [], |r| r.get(0))
 }
 
+pub fn insert_review_log(conn: &Connection, log: &ReviewLog) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO review_log (card_id, deck_id, rating, elapsed_days, new_stability, new_difficulty, new_interval, reviewed_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![log.card_id, log.deck_id, log.rating, log.elapsed_days, log.new_stability, log.new_difficulty, log.new_interval, log.reviewed_at],
+    )?;
+    Ok(())
+}
+
+pub fn get_review_stats(conn: &Connection, deck_id: Option<&str>, since: Option<i64>) -> rusqlite::Result<ReviewStats> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64;
+    let today_start = now_ms - (now_ms % 86_400_000);
+
+    // Today's stats — filter by today_start only (since is for historical range, not today)
+    // "Correct" = good + easy (matches spec), "hard" is neither correct nor again
+    let (today_count, today_again, today_correct) = match deck_id {
+        None => {
+            conn.query_row(
+                "SELECT COUNT(*), COALESCE(SUM(CASE WHEN rating = 'again' THEN 1 ELSE 0 END), 0),
+                         COALESCE(SUM(CASE WHEN rating IN ('good', 'easy') THEN 1 ELSE 0 END), 0)
+                 FROM review_log WHERE reviewed_at >= ?1",
+                params![today_start],
+                |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?)),
+            )?
+        }
+        Some(did) => {
+            conn.query_row(
+                "SELECT COUNT(*), COALESCE(SUM(CASE WHEN rating = 'again' THEN 1 ELSE 0 END), 0),
+                         COALESCE(SUM(CASE WHEN rating IN ('good', 'easy') THEN 1 ELSE 0 END), 0)
+                 FROM review_log WHERE reviewed_at >= ?1 AND deck_id = ?2",
+                params![today_start, did],
+                |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?)),
+            )?
+        }
+    };
+
+    // Daily counts
+    let daily_counts = match (deck_id, since) {
+        (None, None) => {
+            let mut stmt = conn.prepare(
+                "SELECT date(reviewed_at / 1000, 'unixepoch') as d,
+                        COUNT(*) as total,
+                        SUM(CASE WHEN rating = 'again' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN rating = 'hard' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN rating = 'good' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN rating = 'easy' THEN 1 ELSE 0 END)
+                 FROM review_log GROUP BY d ORDER BY d ASC",
+            )?;
+            let x = stmt.query_map([], |r| Ok(DayCount {
+                date: r.get(0)?,
+                total: r.get(1)?,
+                again: r.get(2)?,
+                hard: r.get(3)?,
+                good: r.get(4)?,
+                easy: r.get(5)?,
+            }))?.collect::<rusqlite::Result<Vec<_>>>()?; x
+        }
+        (Some(did), None) => {
+            let mut stmt = conn.prepare(
+                "SELECT date(reviewed_at / 1000, 'unixepoch') as d,
+                        COUNT(*) as total,
+                        SUM(CASE WHEN rating = 'again' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN rating = 'hard' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN rating = 'good' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN rating = 'easy' THEN 1 ELSE 0 END)
+                 FROM review_log WHERE deck_id = ?1 GROUP BY d ORDER BY d ASC",
+            )?;
+            let x = stmt.query_map(params![did], |r| Ok(DayCount {
+                date: r.get(0)?,
+                total: r.get(1)?,
+                again: r.get(2)?,
+                hard: r.get(3)?,
+                good: r.get(4)?,
+                easy: r.get(5)?,
+            }))?.collect::<rusqlite::Result<Vec<_>>>()?; x
+        }
+        (None, Some(s)) => {
+            let mut stmt = conn.prepare(
+                "SELECT date(reviewed_at / 1000, 'unixepoch') as d,
+                        COUNT(*) as total,
+                        SUM(CASE WHEN rating = 'again' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN rating = 'hard' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN rating = 'good' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN rating = 'easy' THEN 1 ELSE 0 END)
+                 FROM review_log WHERE reviewed_at >= ?1 GROUP BY d ORDER BY d ASC",
+            )?;
+            let x = stmt.query_map(params![s], |r| Ok(DayCount {
+                date: r.get(0)?,
+                total: r.get(1)?,
+                again: r.get(2)?,
+                hard: r.get(3)?,
+                good: r.get(4)?,
+                easy: r.get(5)?,
+            }))?.collect::<rusqlite::Result<Vec<_>>>()?; x
+        }
+        (Some(did), Some(s)) => {
+            let mut stmt = conn.prepare(
+                "SELECT date(reviewed_at / 1000, 'unixepoch') as d,
+                        COUNT(*) as total,
+                        SUM(CASE WHEN rating = 'again' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN rating = 'hard' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN rating = 'good' THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN rating = 'easy' THEN 1 ELSE 0 END)
+                 FROM review_log WHERE deck_id = ?1 AND reviewed_at >= ?2 GROUP BY d ORDER BY d ASC",
+            )?;
+            let x = stmt.query_map(params![did, s], |r| Ok(DayCount {
+                date: r.get(0)?,
+                total: r.get(1)?,
+                again: r.get(2)?,
+                hard: r.get(3)?,
+                good: r.get(4)?,
+                easy: r.get(5)?,
+            }))?.collect::<rusqlite::Result<Vec<_>>>()?; x
+        }
+    };
+
+    Ok(ReviewStats {
+        daily_counts,
+        today_count,
+        today_again,
+        today_correct,
+    })
+}
+
 // ────────────────────────────────────────
 // Tauri commands
 // ────────────────────────────────────────
@@ -440,6 +624,18 @@ pub fn db_save_cards_bulk(state: State<'_, DbState>, cards: Vec<Card>) -> Result
         upsert_card(&tx, c).map_err(db_err)?;
     }
     tx.commit().map_err(db_err)
+}
+
+#[tauri::command]
+pub fn db_log_review(state: State<'_, DbState>, log: ReviewLog) -> Result<(), String> {
+    let conn = state.lock().map_err(lock_err)?;
+    insert_review_log(&conn, &log).map_err(db_err)
+}
+
+#[tauri::command]
+pub fn db_get_review_stats(state: State<'_, DbState>, deck_id: Option<String>, since: Option<i64>) -> Result<ReviewStats, String> {
+    let conn = state.lock().map_err(lock_err)?;
+    get_review_stats(&conn, deck_id.as_deref(), since).map_err(db_err)
 }
 
 // ────────────────────────────────────────
@@ -634,5 +830,33 @@ mod tests {
         upsert_card(&conn, &card).unwrap();
         delete_note_row(&conn, "n1").unwrap();
         assert_eq!(list_all_cards(&conn).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn migration_v3_creates_review_log_table() {
+        let conn = test_conn();
+        let count: i64 = conn.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name='review_log'",
+            [], |r| r.get(0),
+        ).unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn log_and_get_review_stats() {
+        let conn = test_conn();
+        upsert_deck(&conn, &Deck { id: "d1".into(), name: "Test".into(), created_at: 0 }).unwrap();
+        let note = Note { id: "n1".into(), deck_id: "d1".into(), note_type: "basic".into(), front: "f".into(), back: "b".into(), tags: vec![], created_at: 0, edited_at: 0 };
+        upsert_note(&conn, &note).unwrap();
+        let card = Card { id: "c1".into(), deck_id: "d1".into(), note_id: "n1".into(), ordinal: 0, front: "f".into(), back: "b".into(), stability: None, difficulty: None, last_review: None, interval: 0, due: 0, reps: 0, lapses: 0, state: "new".into(), ease: 2.5, tags: vec![], created_at: 0, edited_at: 0, flag: 0, position: 0 };
+        upsert_card(&conn, &card).unwrap();
+
+        // Use a timestamp in the past so it doesn't count as "today"
+        insert_review_log(&conn, &ReviewLog { card_id: "c1".into(), deck_id: "d1".into(), rating: "good".into(), elapsed_days: 0, new_stability: Some(3.5), new_difficulty: Some(5.0), new_interval: 1, reviewed_at: 1712700000000 }).unwrap();
+
+        let stats = get_review_stats(&conn, None, None).unwrap();
+        assert_eq!(stats.daily_counts.len(), 1);
+        assert_eq!(stats.daily_counts[0].good, 1);
+        assert_eq!(stats.today_count, 0); // past timestamp
     }
 }

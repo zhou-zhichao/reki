@@ -8,6 +8,7 @@
     { id: 'review', label: 'Review', icon: '◈' },
     { id: 'decks', label: 'Decks', icon: '▤' },
     { id: 'browse', label: 'Browse', icon: '⌕' },
+    { id: 'stats', label: 'Stats', icon: '▦' },
     { id: 'generate', label: 'Generate', icon: '✦' },
   ];
 
