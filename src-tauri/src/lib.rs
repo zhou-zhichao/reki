@@ -158,6 +158,8 @@ pub fn run() {
             db::db_save_card,
             db::db_delete_card,
             db::db_save_cards_bulk,
+            db::db_log_review,
+            db::db_get_review_stats,
             media::media_save_blob,
             media::media_clean_unused,
         ])
