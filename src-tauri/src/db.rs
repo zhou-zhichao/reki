@@ -449,41 +449,24 @@ pub fn get_review_stats(conn: &Connection, deck_id: Option<&str>, since: Option<
         .as_millis() as i64;
     let today_start = now_ms - (now_ms % 86_400_000);
 
-    // Today's stats
-    let (today_count, today_again, today_correct) = match (deck_id, since) {
-        (None, None) => {
+    // Today's stats — filter by today_start only (since is for historical range, not today)
+    // "Correct" = good + easy (matches spec), "hard" is neither correct nor again
+    let (today_count, today_again, today_correct) = match deck_id {
+        None => {
             conn.query_row(
                 "SELECT COUNT(*), COALESCE(SUM(CASE WHEN rating = 'again' THEN 1 ELSE 0 END), 0),
-                         COALESCE(SUM(CASE WHEN rating != 'again' THEN 1 ELSE 0 END), 0)
+                         COALESCE(SUM(CASE WHEN rating IN ('good', 'easy') THEN 1 ELSE 0 END), 0)
                  FROM review_log WHERE reviewed_at >= ?1",
                 params![today_start],
                 |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?)),
             )?
         }
-        (Some(did), None) => {
+        Some(did) => {
             conn.query_row(
                 "SELECT COUNT(*), COALESCE(SUM(CASE WHEN rating = 'again' THEN 1 ELSE 0 END), 0),
-                         COALESCE(SUM(CASE WHEN rating != 'again' THEN 1 ELSE 0 END), 0)
+                         COALESCE(SUM(CASE WHEN rating IN ('good', 'easy') THEN 1 ELSE 0 END), 0)
                  FROM review_log WHERE reviewed_at >= ?1 AND deck_id = ?2",
                 params![today_start, did],
-                |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?)),
-            )?
-        }
-        (None, Some(s)) => {
-            conn.query_row(
-                "SELECT COUNT(*), COALESCE(SUM(CASE WHEN rating = 'again' THEN 1 ELSE 0 END), 0),
-                         COALESCE(SUM(CASE WHEN rating != 'again' THEN 1 ELSE 0 END), 0)
-                 FROM review_log WHERE reviewed_at >= ?1 AND reviewed_at >= ?2",
-                params![today_start, s],
-                |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?)),
-            )?
-        }
-        (Some(did), Some(s)) => {
-            conn.query_row(
-                "SELECT COUNT(*), COALESCE(SUM(CASE WHEN rating = 'again' THEN 1 ELSE 0 END), 0),
-                         COALESCE(SUM(CASE WHEN rating != 'again' THEN 1 ELSE 0 END), 0)
-                 FROM review_log WHERE reviewed_at >= ?1 AND deck_id = ?2 AND reviewed_at >= ?3",
-                params![today_start, did, s],
                 |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, i64>(2)?)),
             )?
         }
