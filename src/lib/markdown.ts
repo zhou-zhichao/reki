@@ -8,6 +8,7 @@
 import { marked, type Token, type Tokens } from 'marked';
 import katex from 'katex';
 import DOMPurify from 'dompurify';
+import { renderClozeFront, renderClozeBack } from './cloze';
 // DOMPurify needs a window-like object. In the browser it uses globalThis.window;
 // in tests (jsdom) globalThis.window is available automatically.
 
@@ -236,6 +237,21 @@ export async function renderMarkdown(src: string): Promise<string> {
 }
 
 /**
+ * Render Markdown with cloze preprocessing.
+ * Cloze markers are resolved before markdown parsing.
+ */
+export async function renderMarkdownCloze(
+  src: string,
+  ordinal: number,
+  revealed: boolean,
+): Promise<string> {
+  const processed = revealed
+    ? renderClozeBack(src, ordinal)
+    : renderClozeFront(src, ordinal);
+  return renderMarkdown(processed);
+}
+
+/**
  * Synchronously strip Markdown to plain text for table row previews.
  * Does NOT call marked — must stay synchronous.
  */
@@ -243,6 +259,9 @@ export function stripMarkdown(src: string, maxLen = 120): string {
   if (!src || !src.trim()) return '';
 
   let s = src;
+
+  // Strip cloze markers → answer text
+  s = s.replace(/\{\{c\d+::([^}]*?)(?:::[^}]*?)?\}\}/g, '$1');
 
   // Fenced code blocks  → space
   s = s.replace(/```[\s\S]*?```/g, ' ');

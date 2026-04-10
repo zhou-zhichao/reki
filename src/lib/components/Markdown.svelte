@@ -1,17 +1,26 @@
 <script lang="ts">
   import { renderMarkdown } from '../markdown';
+  import { renderMarkdownCloze } from '../markdown';
 
-  interface Props { src: string; }
-  let { src }: Props = $props();
+  interface Props {
+    src: string;
+    clozeOrdinal?: number;
+    clozeRevealed?: boolean;
+  }
+  let { src, clozeOrdinal, clozeRevealed = false }: Props = $props();
 
   let html = $state('');
   let pending = $state(false);
 
   $effect(() => {
     const current = src;
+    const ordinal = clozeOrdinal;
+    const revealed = clozeRevealed;
     pending = true;
-    renderMarkdown(current).then(result => {
-      // Discard stale results if src changed during render
+    const promise = ordinal !== undefined
+      ? renderMarkdownCloze(current, ordinal, revealed)
+      : renderMarkdown(current);
+    promise.then(result => {
       if (current === src) {
         html = result;
         pending = false;
@@ -147,5 +156,22 @@
     color: var(--c-again);
     font-family: 'Geist Mono', monospace;
     font-size: var(--text-xs);
+  }
+
+  .md :global(.cloze-blank) {
+    background: var(--cloze-blank-bg, color-mix(in srgb, var(--accent) 15%, transparent));
+    color: var(--cloze-blank-color, var(--accent));
+    padding: 0.1em 0.4em;
+    border-radius: 3px;
+    font-style: italic;
+    font-weight: 500;
+  }
+
+  .md :global(.cloze-answer) {
+    background: var(--cloze-answer-bg, color-mix(in srgb, var(--c-good) 15%, transparent));
+    color: var(--cloze-answer-color, var(--c-good));
+    padding: 0.1em 0.4em;
+    border-radius: 3px;
+    font-weight: 600;
   }
 </style>
