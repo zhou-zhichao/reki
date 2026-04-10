@@ -85,3 +85,19 @@ describe('renderClozeBack', () => {
     expect(result).not.toContain('{{');
   });
 });
+
+import { renderMarkdownCloze } from './markdown';
+
+describe('renderMarkdownCloze', () => {
+  it('renders cloze front with markdown', async () => {
+    const html = await renderMarkdownCloze('**Bold** {{c1::Paris}}', 1, false);
+    expect(html).toContain('<strong>Bold</strong>');
+    expect(html).toContain('cloze-blank');
+  });
+
+  it('renders cloze back with highlighted answer', async () => {
+    const html = await renderMarkdownCloze('{{c1::Paris}}', 1, true);
+    expect(html).toContain('cloze-answer');
+    expect(html).toContain('Paris');
+  });
+});

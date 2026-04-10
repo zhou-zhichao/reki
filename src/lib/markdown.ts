@@ -8,6 +8,7 @@
 import { marked, type Token, type Tokens } from 'marked';
 import katex from 'katex';
 import DOMPurify from 'dompurify';
+import { renderClozeFront, renderClozeBack } from './cloze';
 // DOMPurify needs a window-like object. In the browser it uses globalThis.window;
 // in tests (jsdom) globalThis.window is available automatically.
 
@@ -233,6 +234,21 @@ export async function renderMarkdown(src: string): Promise<string> {
     const msg = e instanceof Error ? e.message : String(e);
     return `<div class="md-error">Render failed: ${escapeHtml(msg)}</div>`;
   }
+}
+
+/**
+ * Render Markdown with cloze preprocessing.
+ * Cloze markers are resolved before markdown parsing.
+ */
+export async function renderMarkdownCloze(
+  src: string,
+  ordinal: number,
+  revealed: boolean,
+): Promise<string> {
+  const processed = revealed
+    ? renderClozeBack(src, ordinal)
+    : renderClozeFront(src, ordinal);
+  return renderMarkdown(processed);
 }
 
 /**
