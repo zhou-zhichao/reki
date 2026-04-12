@@ -14,9 +14,9 @@
   let { segments, centerLabel, size = 180 }: Props = $props();
 
   const total = $derived(segments.reduce((s, seg) => s + seg.value, 0));
-  const radius = size / 2 - 10;
   const strokeWidth = 24;
-  const circumference = 2 * Math.PI * radius;
+  const radius = $derived(size / 2 - strokeWidth / 2);
+  const circumference = $derived(2 * Math.PI * radius);
 
   const arcs = $derived.by(() => {
     let offset = 0;
